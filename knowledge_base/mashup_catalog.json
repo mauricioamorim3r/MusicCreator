@@ -1,0 +1,68 @@
+{
+  "tracks": [
+    {
+      "title": "Neon Afterglow",
+      "artist": "Atlas Night",
+      "genre": "Melodic House",
+      "bpm": 122.0,
+      "camelot_key": "8A",
+      "key_note": "A"
+    },
+    {
+      "title": "Pulse District",
+      "artist": "Kora Signal",
+      "genre": "Tech House",
+      "bpm": 124.0,
+      "camelot_key": "9A",
+      "key_note": "E"
+    },
+    {
+      "title": "Glass Horizon",
+      "artist": "Mira Tone",
+      "genre": "Progressive House",
+      "bpm": 126.0,
+      "camelot_key": "8B",
+      "key_note": "C"
+    },
+    {
+      "title": "Velvet Traffic",
+      "artist": "Orion Bloom",
+      "genre": "Afro House",
+      "bpm": 120.0,
+      "camelot_key": "7A",
+      "key_note": "D"
+    },
+    {
+      "title": "Silver Transit",
+      "artist": "Nova Figure",
+      "genre": "Dance Pop",
+      "bpm": 128.0,
+      "camelot_key": "9B",
+      "key_note": "G"
+    },
+    {
+      "title": "Midnight Static",
+      "artist": "Rua Delta",
+      "genre": "Indie Electronic",
+      "bpm": 118.0,
+      "camelot_key": "6A",
+      "key_note": "G"
+    },
+    {
+      "title": "Quartz Echo",
+      "artist": "Luna Process",
+      "genre": "Synthwave",
+      "bpm": 116.0,
+      "camelot_key": "10A",
+      "key_note": "B"
+    },
+    {
+      "title": "Afterparty Diagram",
+      "artist": "Static Vale",
+      "genre": "Electro Pop",
+      "bpm": 123.0,
+      "camelot_key": "8A",
+      "key_note": "A"
+    }
+  ]
+}
