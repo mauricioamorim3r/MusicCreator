@@ -100,6 +100,25 @@ def command_available(command: str) -> bool:
     return shutil.which(command) is not None
 
 
+def ffmpeg_executable() -> str | None:
+    system_ffmpeg = shutil.which("ffmpeg")
+    if system_ffmpeg:
+        return system_ffmpeg
+    if importlib.util.find_spec("imageio_ffmpeg") is None:
+        return None
+    try:
+        import imageio_ffmpeg
+
+        candidate = imageio_ffmpeg.get_ffmpeg_exe()
+        return candidate if candidate and Path(candidate).exists() else None
+    except Exception:
+        return None
+
+
+def ffmpeg_available() -> bool:
+    return ffmpeg_executable() is not None
+
+
 def optional_dependency_available(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
 
@@ -147,7 +166,7 @@ def resolve_llm_api_key(provider: str, explicit_api_key: str | None = None) -> s
 
 def runtime_capabilities() -> dict[str, bool]:
     return {
-        "ffmpeg": command_available("ffmpeg"),
+        "ffmpeg": ffmpeg_available(),
         "yt_dlp": optional_dependency_available("yt_dlp"),
         "demucs": optional_dependency_available("demucs"),
         "whisperx": optional_dependency_available("whisperx"),

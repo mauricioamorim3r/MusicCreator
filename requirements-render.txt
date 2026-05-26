@@ -1,0 +1,22 @@
+# Render cloud profile: keep the web app deployable without local premium ML stacks.
+streamlit>=1.54.0
+anthropic>=0.25.0
+openai>=2.3.0
+google-genai>=1.45.0
+python-dotenv>=1.0.0
+
+# Audio DSP
+librosa>=0.10.1
+soundfile>=0.12.1
+numpy>=1.24.0
+scipy>=1.11.0
+pyloudnorm>=0.1.1
+
+# Visualization
+matplotlib>=3.7.0
+
+# Ingestion, metadata and lyrics
+yt-dlp>=2025.1.1
+imageio-ffmpeg>=0.5.1
+spotipy>=2.23.0
+lyricsgenius>=3.12.2

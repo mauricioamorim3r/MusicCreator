@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-from services.config import WEB_CACHE_DIR, command_available, ensure_runtime_dirs, optional_dependency_available
+from services.config import WEB_CACHE_DIR, ensure_runtime_dirs, ffmpeg_executable, optional_dependency_available
 from services.models import IngestResult
 
 
@@ -61,11 +61,12 @@ def ingest_audio(source: str) -> IngestResult:
             mode="skipped",
         )
 
-    if not command_available("ffmpeg"):
+    ffmpeg_path = ffmpeg_executable()
+    if not ffmpeg_path:
         return IngestResult(
             status="failure",
             error="ffmpeg não está disponível no PATH.",
-            diagnostics=["yt-dlp depende de ffmpeg para normalizar o áudio em WAV."],
+            diagnostics=["yt-dlp depende de ffmpeg para normalizar o áudio em WAV. No Render, use requirements-render.txt com imageio-ffmpeg."],
             mode="skipped",
         )
 
@@ -108,6 +109,8 @@ def ingest_audio(source: str) -> IngestResult:
         "wav",
         "--audio-quality",
         "0",
+        "--ffmpeg-location",
+        str(Path(ffmpeg_path).parent),
         "-o",
         download_template,
         source,
