@@ -3,11 +3,30 @@ from __future__ import annotations
 import importlib.util
 import os
 import shutil
+import sys
 from pathlib import Path
 
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-CACHE_DIR = ROOT_DIR / ".cache"
+def _resource_root() -> Path:
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent.parent
+
+
+def _default_data_root() -> Path:
+    explicit = os.getenv("AUDIOAGENT_DATA_DIR", "").strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    desktop_mode = os.getenv("AUDIOAGENT_DESKTOP_MODE", "").strip().lower() in {"1", "true", "yes"}
+    if desktop_mode or getattr(sys, "frozen", False):
+        base = os.getenv("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(base) / "AudioAgent"
+    return ROOT_DIR
+
+
+ROOT_DIR = _resource_root()
+DATA_ROOT_DIR = _default_data_root()
+CACHE_DIR = DATA_ROOT_DIR / ".cache"
 UPLOAD_CACHE_DIR = CACHE_DIR / "uploads"
 WEB_CACHE_DIR = CACHE_DIR / "web_ingest"
 DSP_CACHE_DIR = CACHE_DIR / "dsp"
@@ -15,7 +34,9 @@ LOUDNESS_CACHE_DIR = CACHE_DIR / "loudness"
 STEMS_CACHE_DIR = CACHE_DIR / "stems"
 TRANSCRIPT_CACHE_DIR = CACHE_DIR / "transcripts"
 TMP_DIR = CACHE_DIR / "tmp"
-OUTPUT_DIR = ROOT_DIR / "outputs"
+OUTPUT_DIR = DATA_ROOT_DIR / "outputs"
+LOG_DIR = DATA_ROOT_DIR / "logs"
+DATABASE_PATH = DATA_ROOT_DIR / "audioagent.db"
 KNOWLEDGE_BASE_DIR = ROOT_DIR / "knowledge_base"
 
 AUDIO_EXTENSIONS = ("mp3", "wav", "flac", "ogg", "m4a", "aac")
@@ -91,6 +112,8 @@ def ensure_runtime_dirs() -> None:
         TRANSCRIPT_CACHE_DIR,
         TMP_DIR,
         OUTPUT_DIR,
+        LOG_DIR,
+        DATABASE_PATH.parent,
         KNOWLEDGE_BASE_DIR,
     ):
         path.mkdir(parents=True, exist_ok=True)

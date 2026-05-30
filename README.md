@@ -50,6 +50,22 @@ copy .env.example .env
 streamlit run app.py
 ```
 
+## Versão standalone completa
+
+O projeto inclui preparação para executável Windows completo, com banco SQLite local em `%LOCALAPPDATA%\AudioAgent`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_desktop_source.ps1
+```
+
+Para gerar o executável:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_standalone_full.ps1 -Clean
+```
+
+Veja [docs/standalone_full.md](docs/standalone_full.md).
+
 ## Deploy no Render
 
 O repositório inclui um Blueprint `render.yaml` para deploy no Render:

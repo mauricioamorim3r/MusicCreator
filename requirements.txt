@@ -17,11 +17,16 @@ matplotlib>=3.7.0
 
 # V2 ingestion and matching
 yt-dlp>=2025.1.1
+imageio-ffmpeg>=0.5.1
 spotipy>=2.23.0
 lyricsgenius>=3.12.2
 
 # Optional premium audio-text stack
 demucs>=4.0.1
 whisperx>=3.1.0
+openai-whisper>=20240930
 torch>=2.1.0
 torchaudio>=2.1.0
+
+# Standalone packaging
+pyinstaller>=6.10.0

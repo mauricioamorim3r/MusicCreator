@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from services.config import CACHE_DIR, ensure_runtime_dirs
+from services.local_database import list_analysis_runs, load_analysis_run, save_analysis_run
 
 
 HISTORY_DIR = CACHE_DIR / "history"
@@ -28,6 +29,19 @@ def _load_history_index() -> list[dict[str, Any]]:
         return json.loads(HISTORY_INDEX_PATH.read_text(encoding="utf-8"))
     except Exception:
         return []
+
+
+def _migrate_json_history_to_database() -> None:
+    for entry in _load_history_index():
+        run_id = entry.get("run_id")
+        json_path = Path(str(entry.get("json_path", "")))
+        if not run_id or not json_path.exists():
+            continue
+        try:
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        save_analysis_run(entry, payload)
 
 
 def _save_history_index(entries: list[dict[str, Any]]) -> None:
@@ -90,15 +104,23 @@ def persist_analysis_run(result_payload: dict[str, Any]) -> dict[str, Any]:
     entries = _load_history_index()
     entries.insert(0, entry)
     _save_history_index(entries[:100])
+    save_analysis_run(entry, result_payload)
     return entry
 
 
 def load_analysis_history(limit: int = 30) -> list[dict[str, Any]]:
-    entries = _load_history_index()
-    return entries[:limit]
+    entries = list_analysis_runs(limit=limit)
+    if entries:
+        return entries
+    _migrate_json_history_to_database()
+    entries = list_analysis_runs(limit=limit)
+    return entries or _load_history_index()[:limit]
 
 
 def load_history_run(run_id: str) -> dict[str, Any] | None:
+    loaded = load_analysis_run(run_id)
+    if loaded:
+        return loaded
     for entry in _load_history_index():
         if entry.get("run_id") != run_id:
             continue
