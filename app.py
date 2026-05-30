@@ -85,6 +85,13 @@ st.markdown(
             linear-gradient(180deg, #050b11 0%, #09131d 42%, #071018 100%);
         color: var(--text-main);
     }
+    [data-testid="stHeader"], header {
+        background: linear-gradient(90deg, rgba(5, 11, 17, 0.96), rgba(9, 19, 29, 0.92)) !important;
+        border-bottom: 1px solid rgba(120,160,190,0.12);
+    }
+    [data-testid="stToolbar"], [data-testid="stDecoration"] {
+        color: rgba(245, 239, 228, 0.72) !important;
+    }
     body, p, li, label, [data-testid="stMarkdownContainer"] {
         font-family: "IBM Plex Sans", sans-serif;
     }
@@ -97,8 +104,42 @@ st.markdown(
         background: linear-gradient(180deg, rgba(6, 13, 20, 0.98), rgba(11, 21, 31, 0.98));
         border-right: 1px solid var(--line-soft);
     }
+    [data-testid="stSidebar"] * {
+        color: #d8e5ef;
+    }
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"] *,
+    [data-testid="stSidebar"] small,
+    [data-testid="stSidebar"] p {
+        color: #8fa6b8 !important;
+    }
     [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
         letter-spacing: 0.06em;
+        color: #f5efe4 !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        border-color: rgba(120,160,190,0.18);
+        background: rgba(255,255,255,0.025);
+        border-radius: 12px;
+    }
+    [data-testid="stSidebar"] input,
+    [data-testid="stSidebar"] textarea,
+    [data-testid="stSidebar"] [data-baseweb="input"] {
+        color: #071018 !important;
+        background: #f7fbff !important;
+        border-radius: 10px;
+    }
+    [data-testid="stSidebar"] input::placeholder,
+    [data-testid="stSidebar"] textarea::placeholder {
+        color: #718294 !important;
+    }
+    [data-testid="stSidebar"] .stButton > button,
+    [data-testid="stSidebar"] .stButton > button * {
+        color: #120c09 !important;
+    }
+    [data-testid="stSidebar"] .stButton > button:disabled,
+    [data-testid="stSidebar"] .stButton > button:disabled * {
+        color: rgba(18, 12, 9, 0.58) !important;
     }
     [data-testid="metric-container"] {
         background: linear-gradient(180deg, rgba(12, 22, 33, 0.96), rgba(8, 16, 25, 0.96));
@@ -131,6 +172,43 @@ st.markdown(
     .stButton > button:hover, .stDownloadButton > button:hover {
         border-color: rgba(255,122,0,0.6);
         background: linear-gradient(90deg, rgba(255,143,51,0.98), rgba(255,169,92,0.98));
+    }
+    .stButton > button:disabled, .stDownloadButton > button:disabled {
+        background: linear-gradient(90deg, rgba(255,122,0,0.38), rgba(255,140,43,0.34)) !important;
+        border-color: rgba(255,122,0,0.16) !important;
+        color: rgba(18, 12, 9, 0.58) !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stFileUploaderDropzone"] {
+        background: linear-gradient(180deg, rgba(15, 28, 41, 0.96), rgba(10, 19, 29, 0.96)) !important;
+        border: 1px dashed rgba(120,160,190,0.35) !important;
+        border-radius: 14px !important;
+    }
+    [data-testid="stFileUploaderDropzone"] * {
+        color: #d8e5ef !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button {
+        background: rgba(255,255,255,0.08) !important;
+        border: 1px solid rgba(120,160,190,0.24) !important;
+        color: #f5efe4 !important;
+        box-shadow: none !important;
+    }
+    .stTextInput input, .stTextArea textarea {
+        background: rgba(245, 249, 252, 0.96) !important;
+        color: #071018 !important;
+        border: 1px solid rgba(120,160,190,0.2) !important;
+        border-radius: 12px !important;
+    }
+    .stTextInput input::placeholder, .stTextArea textarea::placeholder {
+        color: #748699 !important;
+    }
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, var(--accent-cool), var(--accent-main)) !important;
+    }
+    [data-testid="stDataFrame"], [data-testid="stTable"] {
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid rgba(120,160,190,0.14);
     }
     .hero-shell {
         position: relative;
