@@ -25,6 +25,23 @@ O campo `Fontes de pesquisa de músicas` serve para você registrar onde costuma
 
 Essas fontes entram no relatório para documentar o contexto da análise e podem ser consideradas pelos agentes ao comentar os mashups.
 
+## Copiloto Musical
+
+O `Copiloto Musical` é um campo de perguntas dentro da aplicação. Ele usa a LLM configurada e pode trabalhar em quatro modos:
+
+- `Responder sobre a análise atual`: explica métricas, estrutura, letra capturada, matcher e relatório aberto
+- `Consultar histórico local`: procura análises antigas por música, artista, link ou ID
+- `Comparar análises salvas`: compara até três rodadas selecionadas pelo usuário
+- `Orientação musical geral`: responde dúvidas de produção, composição, canto e fluxo de trabalho
+
+As conversas ficam salvas somente no banco local desta instalação.
+
+### Limites de segurança
+
+- O copiloto não executa comandos do computador.
+- O copiloto não recebe acesso livre ao banco de dados: ele usa apenas consultas controladas pela aplicação.
+- O copiloto não afirma que pesquisou na internet. Pesquisa web profunda com fontes verificáveis será adicionada como integração separada.
+
 ## Token da API do Genius
 
 O campo do Genius é opcional. Ele serve para melhorar a verificação online da letra quando o app tenta confirmar se a música encontrada realmente existe em uma base pública de letras.

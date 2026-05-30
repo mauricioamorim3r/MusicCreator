@@ -19,3 +19,6 @@ env/
 *.aac
 *.ogg
 *.log
+*.db
+*.sqlite
+*.sqlite3

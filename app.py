@@ -31,6 +31,8 @@ from services.config import (
     runtime_capabilities,
 )
 from services.history_store import load_analysis_history, load_history_run, persist_analysis_run
+from services.local_database import clear_copilot_messages, list_copilot_messages, search_analysis_runs
+from services.musical_copilot import COPILOT_ACTIONS, ask_copilot
 from services.user_settings import load_user_settings, save_user_settings
 
 load_dotenv()
@@ -505,6 +507,10 @@ def init_session_defaults() -> None:
         "runtime_stage": "idle",
         "runtime_message": "Aplicação pronta para uso.",
         "runtime_last_seen": datetime.now().strftime("%H:%M:%S"),
+        "copilot_session_id": "audioagent-local-main",
+        "copilot_action": "current_analysis",
+        "copilot_question": "",
+        "copilot_history_query": "",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -635,6 +641,135 @@ def render_hero_header() -> None:
         unsafe_allow_html=True,
     )
     render_runtime_health_banner()
+
+
+def _active_llm_options(
+    *,
+    llm_provider: str,
+    llm_model: str,
+    api_key_input: str,
+    auto_llm_fallback: bool,
+) -> dict:
+    return {
+        "provider": llm_provider,
+        "model": llm_model,
+        "api_key": api_key_input,
+        "fallback_enabled": auto_llm_fallback,
+        "configured_api_keys": SAVED_SETTINGS.get("api_keys", {}),
+        "configured_models": SAVED_SETTINGS.get("llm_models", {}),
+    }
+
+
+def render_copilot_panel(
+    *,
+    llm_provider: str,
+    llm_model: str,
+    api_key_input: str,
+    auto_llm_fallback: bool,
+) -> None:
+    session_id = str(st.session_state.get("copilot_session_id", "audioagent-local-main"))
+    with st.expander("🎛️ Copiloto Musical · pergunte, consulte e compare", expanded=False):
+        st.caption(
+            "O copiloto usa a LLM configurada e acessa somente dados autorizados desta instalação. "
+            "Ele não executa comandos do sistema e não faz pesquisa web sem uma integração verificável."
+        )
+        action = st.selectbox(
+            "O que você quer que o copiloto faça?",
+            options=list(COPILOT_ACTIONS),
+            key="copilot_action",
+            format_func=lambda value: COPILOT_ACTIONS[value],
+        )
+
+        history_query = ""
+        selected_run_ids: list[str] = []
+        if action in {"history_search", "compare_runs"}:
+            history_query = st.text_input(
+                "Filtrar histórico por música, artista, link ou ID",
+                key="copilot_history_query",
+                placeholder="Ex.: Armin, Madonna, YouTube...",
+            )
+            history_entries = search_analysis_runs(history_query, limit=12)
+            if history_entries:
+                labels = {
+                    str(entry["run_id"]): (
+                        f"{entry.get('source_title') or 'Sem título'} · "
+                        f"{entry.get('source_artist') or 'artista não identificado'} · "
+                        f"{str(entry.get('timestamp', ''))[:19]}"
+                    )
+                    for entry in history_entries
+                }
+                if action == "compare_runs":
+                    selected_run_ids = st.multiselect(
+                        "Escolha até 3 análises para comparar",
+                        options=list(labels),
+                        format_func=lambda run_id: labels[run_id],
+                        max_selections=3,
+                        key="copilot_selected_runs",
+                    )
+                else:
+                    selected_run_ids = [str(entry["run_id"]) for entry in history_entries[:5]]
+                    st.caption(f"{len(history_entries)} rodada(s) local(is) encontrada(s).")
+            else:
+                st.info("Nenhuma análise local corresponde ao filtro informado.")
+
+        question = st.text_area(
+            "Pergunta para o Copiloto",
+            key="copilot_question",
+            placeholder=(
+                "Ex.: explique a estrutura desta faixa em linguagem simples; "
+                "compare as duas análises; quais gargalos aparecem no histórico?"
+            ),
+            height=96,
+        )
+        col_ask, col_clear = st.columns([0.72, 0.28])
+        ask_clicked = col_ask.button("Perguntar ao Copiloto", type="primary", use_container_width=True)
+        clear_clicked = col_clear.button("Limpar conversa", use_container_width=True)
+
+        if clear_clicked:
+            clear_copilot_messages(session_id)
+            st.rerun()
+
+        if ask_clicked:
+            if action == "compare_runs" and len(selected_run_ids) < 2:
+                st.warning("Escolha pelo menos duas análises salvas para executar uma comparação.")
+            else:
+                try:
+                    with st.spinner("Copiloto organizando os dados locais e consultando a LLM..."):
+                        response = ask_copilot(
+                            session_id=session_id,
+                            question=question,
+                            action=action,
+                            pipeline_state=st.session_state.get("pipeline"),
+                            llm_options=_active_llm_options(
+                                llm_provider=llm_provider,
+                                llm_model=llm_model,
+                                api_key_input=api_key_input,
+                                auto_llm_fallback=auto_llm_fallback,
+                            ),
+                            history_query=history_query,
+                            selected_run_ids=selected_run_ids,
+                        )
+                    if response.get("fallback_used"):
+                        st.info(
+                            f"Fallback de LLM utilizado: {response.get('label')} · {response.get('model')}."
+                        )
+                except Exception as exc:
+                    st.error(f"Copiloto indisponível: {exc}")
+
+        messages = list_copilot_messages(session_id, limit=10)
+        if messages:
+            st.markdown("#### Conversa local")
+            for message in messages:
+                role = "assistant" if message.get("role") == "assistant" else "user"
+                with st.chat_message(role):
+                    st.markdown(str(message.get("content", "")))
+                    if role == "assistant" and message.get("provider"):
+                        st.caption(f"{message.get('provider')} · {message.get('model')}")
+        else:
+            st.caption(
+                "Ainda não há mensagens. Você pode começar perguntando o que significa o BPM, "
+                "pedindo um resumo da análise aberta ou consultando análises antigas."
+            )
 
 
 def build_performance_notes(performance: dict, analysis_context: dict, agents_result: dict) -> list[str]:
@@ -2043,6 +2178,12 @@ with st.sidebar:
 
 
 render_hero_header()
+render_copilot_panel(
+    llm_provider=llm_provider,
+    llm_model=llm_model,
+    api_key_input=api_key_input,
+    auto_llm_fallback=auto_llm_fallback,
+)
 st.markdown(
     '<div class="panel-note">Carregue um arquivo ou um link para iniciar uma leitura completa da música: '
     'estrutura, energia, voz, prompt criativo e riscos de originalidade em um único fluxo.</div>',

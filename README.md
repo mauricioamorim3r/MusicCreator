@@ -10,7 +10,7 @@ Pipeline local para análise musical que combina ingestão por upload ou link, D
 - Matcher local de mashups com catálogo interno e heurística Camelot/BPM
 - Separação de vocais com fallback seguro quando `demucs` não estiver disponível
 - Transcrição alinhada com fallback seguro quando `whisperx` não estiver disponível
-- Matriz de agentes Anthropic com:
+- Matriz de agentes multi-LLM com fallback entre OpenAI, Gemini e Anthropic:
   - DNA instrumental
   - DNA lírico opcional
   - blueprint estrutural
@@ -65,6 +65,17 @@ powershell -ExecutionPolicy Bypass -File scripts\build_standalone_full.ps1 -Clea
 ```
 
 Veja [docs/standalone_full.md](docs/standalone_full.md).
+
+## Copiloto Musical
+
+O painel `Copiloto Musical` permite conversar com a LLM configurada e executar ações seguras dentro da aplicação:
+
+- explicar a análise aberta
+- consultar o histórico SQLite local por título, artista, link ou ID
+- comparar até três análises salvas
+- responder dúvidas gerais de produção musical
+
+O copiloto não executa comandos do sistema nem SQL arbitrário. Pesquisa web profunda com fontes verificáveis deve ser adicionada como integração externa separada.
 
 ## Deploy no Render
 

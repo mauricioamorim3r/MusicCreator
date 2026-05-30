@@ -10,7 +10,7 @@ from typing import Any, Iterator
 from services.config import DATABASE_PATH, ensure_runtime_dirs
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @contextmanager
@@ -94,6 +94,21 @@ def initialize(conn: sqlite3.Connection | None = None) -> None:
                 size_bytes INTEGER,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(run_id) REFERENCES analysis_runs(run_id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS copilot_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                action TEXT,
+                provider TEXT,
+                model TEXT,
+                created_at TEXT NOT NULL,
+                metadata_json TEXT NOT NULL DEFAULT '{}'
             )
             """
         )
@@ -209,6 +224,104 @@ def load_analysis_run(run_id: str) -> dict[str, Any] | None:
     except Exception:
         payload = {}
     return {"entry": entry, "payload": payload}
+
+
+def search_analysis_runs(query: str = "", limit: int = 12) -> list[dict[str, Any]]:
+    normalized_query = (query or "").strip()
+    with connect() as conn:
+        if normalized_query:
+            pattern = f"%{normalized_query}%"
+            rows = conn.execute(
+                """
+                SELECT run_id, timestamp, status, mode, source_type, source_title, source_artist,
+                       source_url, audio_path, llm_provider, llm_model, llm_effective_provider,
+                       llm_effective_model, llm_fallback_used, enable_premium, run_agents,
+                       n_sections, json_path, txt_path, stage_count, total_elapsed_seconds,
+                       slowest_stage, slowest_stage_seconds, error
+                FROM analysis_runs
+                WHERE run_id LIKE ?
+                   OR source_title LIKE ?
+                   OR source_artist LIKE ?
+                   OR source_url LIKE ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (pattern, pattern, pattern, pattern, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT run_id, timestamp, status, mode, source_type, source_title, source_artist,
+                       source_url, audio_path, llm_provider, llm_model, llm_effective_provider,
+                       llm_effective_model, llm_fallback_used, enable_premium, run_agents,
+                       n_sections, json_path, txt_path, stage_count, total_elapsed_seconds,
+                       slowest_stage, slowest_stage_seconds, error
+                FROM analysis_runs
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    return [_row_to_entry(row) for row in rows]
+
+
+def save_copilot_message(
+    *,
+    session_id: str,
+    role: str,
+    content: str,
+    action: str = "",
+    provider: str = "",
+    model: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO copilot_messages(
+                session_id, role, content, action, provider, model, created_at, metadata_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                role,
+                content,
+                action,
+                provider,
+                model,
+                datetime.now().astimezone().isoformat(),
+                json.dumps(metadata or {}, ensure_ascii=False, default=str),
+            ),
+        )
+
+
+def list_copilot_messages(session_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, session_id, role, content, action, provider, model, created_at, metadata_json
+            FROM copilot_messages
+            WHERE session_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (session_id, limit),
+        ).fetchall()
+    messages: list[dict[str, Any]] = []
+    for row in reversed(rows):
+        item = dict(row)
+        try:
+            item["metadata"] = json.loads(item.pop("metadata_json", "{}"))
+        except Exception:
+            item["metadata"] = {}
+        messages.append(item)
+    return messages
+
+
+def clear_copilot_messages(session_id: str) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM copilot_messages WHERE session_id = ?", (session_id,))
 
 
 def _row_to_entry(row: sqlite3.Row) -> dict[str, Any]:
