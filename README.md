@@ -74,8 +74,10 @@ O painel `Copiloto Musical` permite conversar com a LLM configurada e executar a
 - consultar o histórico SQLite local por título, artista, link ou ID
 - comparar até três análises salvas
 - responder dúvidas gerais de produção musical
+- capturar a tela localmente após clique explícito do usuário
+- analisar imagens, TXT, Markdown, JSON, CSV, PDF, DOCX e XLSX anexados
 
-O copiloto não executa comandos do sistema nem SQL arbitrário. Pesquisa web profunda com fontes verificáveis deve ser adicionada como integração externa separada.
+O copiloto não executa comandos do sistema nem SQL arbitrário. A captura de tela nunca ocorre automaticamente. Pesquisa web profunda com fontes verificáveis deve ser adicionada como integração externa separada.
 
 ## Deploy no Render
 

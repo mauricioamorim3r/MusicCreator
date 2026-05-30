@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from typing import Any
 
 from services.config import (
@@ -165,19 +166,35 @@ def call_llm(
     system_prompt: str,
     user_message: str,
     max_tokens: int = 2048,
+    image_inputs: list[dict[str, str]] | None = None,
 ) -> str:
     provider = normalize_provider(provider)
+    image_inputs = image_inputs or []
 
     try:
         if provider == "anthropic":
             import anthropic
 
             client = anthropic.Anthropic(api_key=api_key)
+            anthropic_content: str | list[dict[str, Any]] = user_message
+            if image_inputs:
+                anthropic_content = [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": image["mime_type"],
+                            "data": image["data_base64"],
+                        },
+                    }
+                    for image in image_inputs
+                ]
+                anthropic_content.append({"type": "text", "text": user_message})
             response = client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
                 system=system_prompt,
-                messages=[{"role": "user", "content": user_message}],
+                messages=[{"role": "user", "content": anthropic_content}],
             )
             return response.content[0].text
 
@@ -185,12 +202,28 @@ def call_llm(
             from openai import OpenAI
 
             client = OpenAI(api_key=api_key)
+            openai_content: str | list[dict[str, Any]] = user_message
+            if image_inputs:
+                openai_content = [{"type": "text", "text": user_message}]
+                for image in image_inputs:
+                    openai_content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": (
+                                    f"data:{image['mime_type']};base64,"
+                                    f"{image['data_base64']}"
+                                ),
+                                "detail": "high",
+                            },
+                        }
+                    )
             response = client.chat.completions.create(
                 model=model,
                 max_tokens=max_tokens,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
+                    {"role": "user", "content": openai_content},
                 ],
             )
             return _extract_openai_text(response)
@@ -200,9 +233,19 @@ def call_llm(
             from google.genai import types
 
             client = genai.Client(api_key=api_key)
+            gemini_contents: str | list[Any] = user_message
+            if image_inputs:
+                gemini_contents = [
+                    types.Part.from_bytes(
+                        data=base64.b64decode(image["data_base64"]),
+                        mime_type=image["mime_type"],
+                    )
+                    for image in image_inputs
+                ]
+                gemini_contents.append(user_message)
             response = client.models.generate_content(
                 model=model,
-                contents=user_message,
+                contents=gemini_contents,
                 config=types.GenerateContentConfig(
                     systemInstruction=system_prompt,
                     maxOutputTokens=max_tokens,
@@ -227,6 +270,7 @@ def call_llm_with_fallback(
     system_prompt: str,
     user_message: str,
     max_tokens: int = 2048,
+    image_inputs: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     if not candidates:
         raise LLMProviderError(
@@ -249,6 +293,7 @@ def call_llm_with_fallback(
                 system_prompt=system_prompt,
                 user_message=user_message,
                 max_tokens=max_tokens,
+                image_inputs=image_inputs,
             )
             attempts.append(
                 {

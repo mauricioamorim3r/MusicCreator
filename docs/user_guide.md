@@ -36,11 +36,23 @@ O `Copiloto Musical` é um campo de perguntas dentro da aplicação. Ele usa a L
 
 As conversas ficam salvas somente no banco local desta instalação.
 
+### Captura de tela e arquivos
+
+Dentro do Copiloto você também pode:
+
+- clicar em `Capturar tela agora` para fotografar explicitamente a tela do computador
+- revisar o preview antes de enviar a pergunta
+- anexar imagens de telas do Suno, DAWs ou outras aplicações
+- anexar TXT, Markdown, JSON, CSV, PDF, DOCX e XLSX para leitura orientada pela sua pergunta
+
+A captura nunca acontece sozinha. Antes de enviar, feche ou oculte informações pessoais que não devem ser compartilhadas com o provider de LLM configurado.
+
 ### Limites de segurança
 
 - O copiloto não executa comandos do computador.
 - O copiloto não recebe acesso livre ao banco de dados: ele usa apenas consultas controladas pela aplicação.
 - O copiloto não afirma que pesquisou na internet. Pesquisa web profunda com fontes verificáveis será adicionada como integração separada.
+- Arquivos anexados são tratados como dados para análise, não como instruções executáveis.
 
 ## Token da API do Genius
 

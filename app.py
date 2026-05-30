@@ -6,6 +6,7 @@ Streamlit shell para ingestão local/web, DSP, premium audio-text e agentes IA.
 from __future__ import annotations
 
 from datetime import datetime
+import base64
 import json
 import mimetypes
 import os
@@ -18,6 +19,7 @@ from dotenv import load_dotenv
 
 import core.web_ingest as web_ingest
 from services.audio_pipeline import run_audio_pipeline
+from services.copilot_attachments import capture_screen, prepare_attachment
 from services.config import (
     AUDIO_EXTENSIONS,
     OUTPUT_DIR,
@@ -511,6 +513,7 @@ def init_session_defaults() -> None:
         "copilot_action": "current_analysis",
         "copilot_question": "",
         "copilot_history_query": "",
+        "copilot_captured_attachments": [],
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -712,6 +715,65 @@ def render_copilot_panel(
             else:
                 st.info("Nenhuma análise local corresponde ao filtro informado.")
 
+        st.markdown("#### Anexos opcionais")
+        st.caption(
+            "Você pode anexar telas, PDFs, documentos e planilhas. "
+            "A captura de tela só acontece quando você clicar no botão abaixo."
+        )
+        uploaded_attachments = st.file_uploader(
+            "Anexar arquivos para o Copiloto",
+            type=["png", "jpg", "jpeg", "webp", "gif", "txt", "md", "json", "csv", "log", "yaml", "yml", "pdf", "docx", "xlsx"],
+            accept_multiple_files=True,
+            key="copilot_attachment_uploads",
+            help="Limite de 15 MB por arquivo. No máximo quatro anexos são enviados em uma pergunta.",
+        )
+        col_capture, col_remove = st.columns(2)
+        capture_clicked = col_capture.button("📷 Capturar tela agora", use_container_width=True)
+        remove_clicked = col_remove.button("Remover capturas", use_container_width=True)
+
+        if capture_clicked:
+            try:
+                captured = list(st.session_state.get("copilot_captured_attachments", []))
+                captured.append(capture_screen())
+                st.session_state["copilot_captured_attachments"] = captured[-2:]
+                st.success("Tela capturada localmente. Revise o preview antes de perguntar.")
+            except Exception as exc:
+                st.error(f"Falha ao capturar tela: {exc}")
+        if remove_clicked:
+            st.session_state["copilot_captured_attachments"] = []
+            st.rerun()
+
+        attachments: list[dict] = []
+        for uploaded_attachment in (uploaded_attachments or [])[:4]:
+            try:
+                attachments.append(
+                    prepare_attachment(uploaded_attachment.name, uploaded_attachment.getvalue())
+                )
+            except Exception as exc:
+                st.warning(f"`{uploaded_attachment.name}` não pôde ser anexado: {exc}")
+        attachments.extend(st.session_state.get("copilot_captured_attachments", []))
+        attachments = attachments[:4]
+
+        if attachments:
+            st.caption(
+                "Anexos prontos: "
+                + ", ".join(
+                    f"{attachment.get('name')} ({attachment.get('kind')})"
+                    for attachment in attachments
+                )
+            )
+            captured_images = [
+                attachment for attachment in st.session_state.get("copilot_captured_attachments", [])
+                if attachment.get("image_base64")
+            ]
+            if captured_images:
+                with st.expander("Revisar última captura de tela", expanded=False):
+                    st.image(
+                        base64.b64decode(captured_images[-1]["image_base64"]),
+                        caption="Captura local que será enviada junto com a pergunta.",
+                        use_container_width=True,
+                    )
+
         question = st.text_area(
             "Pergunta para o Copiloto",
             key="copilot_question",
@@ -748,6 +810,7 @@ def render_copilot_panel(
                             ),
                             history_query=history_query,
                             selected_run_ids=selected_run_ids,
+                            attachments=attachments,
                         )
                     if response.get("fallback_used"):
                         st.info(

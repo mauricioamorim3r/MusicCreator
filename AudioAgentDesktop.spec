@@ -57,6 +57,10 @@ for dist_name in (
     "openai",
     "google-genai",
     "lyricsgenius",
+    "pillow",
+    "pypdf",
+    "python-docx",
+    "openpyxl",
 ):
     try:
         datas += copy_metadata(dist_name)
@@ -69,6 +73,10 @@ hiddenimports = [
     "watchdog.observers.winapi",
     "sqlite3",
     "PIL._tkinter_finder",
+    "PIL.ImageGrab",
+    "pypdf",
+    "docx",
+    "openpyxl",
     "sklearn",
     "sklearn.utils._typedefs",
     "sklearn.neighbors._partition_nodes",

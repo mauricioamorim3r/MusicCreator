@@ -22,3 +22,5 @@ env/
 *.db
 *.sqlite
 *.sqlite3
+.playwright-cli/
+.playwright-mcp/
