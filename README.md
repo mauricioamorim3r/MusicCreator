@@ -58,10 +58,23 @@ O projeto inclui preparação para executável Windows completo, com banco SQLit
 powershell -ExecutionPolicy Bypass -File scripts\run_desktop_source.ps1
 ```
 
-Para gerar o executável:
+Para gerar rapidamente o shell desktop durante o desenvolvimento:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build_standalone_full.ps1 -Clean
+powershell -ExecutionPolicy Bypass -File scripts\build_standalone_full.ps1 -Clean -SkipInstall
+```
+
+Para preparar uma vez o runtime musical portátil e anexá-lo à distribuição:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_premium_runtime.ps1 -Force
+powershell -ExecutionPolicy Bypass -File scripts\bundle_premium_runtime.ps1
+```
+
+Para gerar tudo em um único comando:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_standalone_full.ps1 -Clean -PreparePremiumRuntime -BundlePremiumRuntime
 ```
 
 Veja [docs/standalone_full.md](docs/standalone_full.md).
@@ -97,5 +110,5 @@ Use `requirements-render.txt` no Render para evitar instalar a pilha premium pes
 
 - O alvo principal é Windows local com CPU.
 - `ffmpeg` precisa estar no `PATH` para ingestão por link.
-- `demucs` e `whisperx` são opcionais; quando não estiverem disponíveis, o app continua com fallback sem quebrar o fluxo.
+- `demucs` e `whisperx` rodam no runtime premium companheiro; quando não estiverem disponíveis, o app continua com fallback sem quebrar o fluxo.
 - O matcher usa catálogo local nesta fundação. A integração com Spotify fica para uma fase posterior.

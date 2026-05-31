@@ -1,0 +1,9 @@
+# Companion runtime for CPU-first vocal separation and transcription.
+# Keep the heavy stack pinned so pip does not spend tens of minutes
+# backtracking through Transformers/Torch compatibility during packaging.
+demucs==4.0.1
+whisperx==3.8.6
+openai-whisper==20250625
+torch==2.8.0
+torchaudio==2.8.0
+transformers==4.57.6

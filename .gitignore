@@ -8,6 +8,7 @@ __pycache__/
 outputs/
 build/
 dist/
+.runtime/
 .streamlit/secrets.toml
 .venv/
 venv/

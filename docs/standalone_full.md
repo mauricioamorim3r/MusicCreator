@@ -41,16 +41,63 @@ Os arquivos pesados continuam no filesystem, e o banco guarda seus caminhos e me
 powershell -ExecutionPolicy Bypass -File scripts\run_desktop_source.ps1
 ```
 
-## Gerar executavel completo
+## Arquitetura do pacote
+
+O pacote Windows usa duas camadas dentro da mesma pasta distribuivel:
+
+- `AudioAgentDesktop.exe`: shell desktop com Streamlit, DSP, LLMs, ingestao, banco local e interface.
+- `runtime\premium\python.exe`: runtime companheiro isolado para Demucs, WhisperX, Whisper, Torch e Torchaudio.
+
+Essa separacao evita que o PyInstaller tente congelar recursivamente todo o ecossistema de machine learning. O aplicativo continua unico para o usuario, mas os motores pesados rodam como ferramentas Python normais.
+
+## Gerar shell desktop
+
+Durante desenvolvimento, gere apenas o shell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build_standalone_full.ps1 -Clean
+powershell -ExecutionPolicy Bypass -File scripts\build_standalone_full.ps1 -Clean -SkipInstall
 ```
 
 Saida esperada:
 
 ```text
 dist\AudioAgentDesktop\AudioAgentDesktop.exe
+```
+
+## Preparar runtime premium portatil
+
+Monte o runtime apenas na primeira vez ou quando mudar `requirements-premium.txt`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_premium_runtime.ps1 -Force
+```
+
+O runtime reutilizavel fica em:
+
+```text
+.runtime\premium\
+```
+
+Anexe esse runtime ao shell ja gerado sem repetir o build:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\bundle_premium_runtime.ps1
+```
+
+## Gerar pacote completo em um comando
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_standalone_full.ps1 -Clean -PreparePremiumRuntime -BundlePremiumRuntime
+```
+
+Distribua a pasta inteira:
+
+```text
+dist\AudioAgentDesktop\
+├── AudioAgentDesktop.exe
+├── _internal\
+└── runtime\
+    └── premium\
 ```
 
 O log do build fica em:
@@ -61,9 +108,10 @@ logs\build_standalone_full.log
 
 ## Observacoes importantes
 
-- O build completo pode ser muito grande por causa de Torch, Torchaudio, Demucs e WhisperX.
+- O shell e o runtime premium sao reconstruidos separadamente para reduzir tempo de manutencao.
+- O runtime premium pode ocupar alguns gigabytes por causa de Torch, Torchaudio, Demucs e WhisperX.
 - A primeira execucao pode demorar porque modelos podem ser baixados/carregados pelas bibliotecas.
 - Em algumas maquinas, antivirus pode analisar o executavel grande por bastante tempo.
-- Se quiser distribuir para outro computador, teste a pasta inteira `dist\AudioAgentDesktop`, nao apenas o `.exe`, porque este spec usa modo `onedir` para reduzir riscos com bibliotecas pesadas.
+- Para outro computador, copie a pasta inteira `dist\AudioAgentDesktop`, nunca apenas o `.exe`.
 - FFmpeg e buscado primeiro no `PATH`; se nao existir, o app tenta `imageio-ffmpeg`.
-- Se o PyInstaller ficar travado coletando Torch/WhisperX por muitas horas, interrompa e rode novamente. O spec foi ajustado para coletar pacotes pesados de forma mais conservadora.
+- Para desenvolvimento local, o app tambem aceita `AUDIOAGENT_PREMIUM_PYTHON` apontando para um Python externo com os motores instalados.

@@ -15,6 +15,9 @@ datas = [
 
 binaries = []
 
+# Heavy ML engines run in the companion premium runtime. Keeping them outside
+# PyInstaller avoids a multi-hour recursive analysis and lets the frozen shell
+# call Demucs/WhisperX as normal Python tools.
 for package in (
     "streamlit",
     "altair",
@@ -22,11 +25,6 @@ for package in (
     "matplotlib",
     "imageio_ffmpeg",
     "yt_dlp",
-    "whisperx",
-    "whisper",
-    "demucs",
-    "torch",
-    "torchaudio",
 ):
     try:
         datas += collect_data_files(package, include_py_files=False)
@@ -48,15 +46,13 @@ for dist_name in (
     "soundfile",
     "matplotlib",
     "yt-dlp",
-    "torch",
-    "torchaudio",
-    "demucs",
-    "whisperx",
-    "openai-whisper",
+    "imageio-ffmpeg",
     "anthropic",
     "openai",
     "google-genai",
     "lyricsgenius",
+    "pyloudnorm",
+    "scikit-learn",
     "pillow",
     "pypdf",
     "python-docx",
@@ -77,23 +73,14 @@ hiddenimports = [
     "pypdf",
     "docx",
     "openpyxl",
+    "librosa",
+    "soundfile",
+    "pyloudnorm",
+    "numba",
+    "llvmlite",
     "sklearn",
     "sklearn.utils._typedefs",
     "sklearn.neighbors._partition_nodes",
-    "librosa",
-    "soundfile",
-    "numba",
-    "llvmlite",
-    "torch",
-    "torchaudio",
-    "demucs",
-    "demucs.separate",
-    "whisperx",
-    "whisper",
-    "faster_whisper",
-    "ctranslate2",
-    "onnxruntime",
-    "transformers",
     "anthropic",
     "openai",
     "google.genai",
@@ -114,17 +101,24 @@ for package in (
 excludes = [
     "tensorflow",
     "tensorboard",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "demucs",
+    "whisperx",
+    "whisper",
+    "faster_whisper",
+    "ctranslate2",
+    "onnxruntime",
+    "transformers",
     "plotly",
     "pytest",
     "IPython",
     "jupyter",
     "notebook",
     "matplotlib.tests",
-    "sklearn.tests",
     "scipy.tests",
     "pandas.tests",
-    "torch.testing",
-    "torch.distributed.elastic",
 ]
 
 

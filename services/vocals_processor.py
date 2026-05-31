@@ -3,11 +3,17 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
-from services.config import STEMS_CACHE_DIR, TRANSCRIPT_CACHE_DIR, ensure_runtime_dirs, optional_dependency_available
+from services.config import (
+    STEMS_CACHE_DIR,
+    TRANSCRIPT_CACHE_DIR,
+    ensure_runtime_dirs,
+    premium_python_executable,
+    premium_subprocess_env,
+    premium_worker_path,
+)
 from services.models import StemResult, TranscriptResult
 
 
@@ -39,7 +45,8 @@ def separate_vocals(audio_path: str) -> StemResult:
             metadata={"cache_hit": True},
         )
 
-    if not optional_dependency_available("demucs"):
+    runtime_python = premium_python_executable("demucs")
+    if not runtime_python:
         return StemResult(
             status="success",
             mode="fallback",
@@ -48,13 +55,13 @@ def separate_vocals(audio_path: str) -> StemResult:
                 "mix_path": audio_path,
                 "stems": {"full_mix": audio_path},
             },
-            diagnostics=["Demucs ausente; usando a mix completa como fallback para análise vocal."],
+            diagnostics=["Runtime Demucs ausente; usando a mix completa como fallback para análise vocal."],
             metadata={"cache_hit": False},
         )
 
     target_dir.mkdir(parents=True, exist_ok=True)
     command = [
-        sys.executable,
+        runtime_python,
         "-m",
         "demucs",
         "--two-stems",
@@ -67,7 +74,13 @@ def separate_vocals(audio_path: str) -> StemResult:
     ]
 
     try:
-        subprocess.run(command, capture_output=True, text=True, check=True)
+        subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=premium_subprocess_env(runtime_python),
+        )
         vocals_candidate = next(target_dir.rglob("vocals.wav"), None)
         no_vocals_candidate = next(target_dir.rglob("no_vocals.wav"), None)
         if vocals_candidate is None:
@@ -89,7 +102,7 @@ def separate_vocals(audio_path: str) -> StemResult:
                 },
             },
             diagnostics=["Separação de vocais concluída com Demucs em CPU."],
-            metadata={"cache_hit": False},
+            metadata={"cache_hit": False, "runtime_python": runtime_python},
         )
     except Exception as exc:
         return StemResult(
@@ -101,45 +114,8 @@ def separate_vocals(audio_path: str) -> StemResult:
                 "stems": {"full_mix": audio_path},
             },
             diagnostics=[f"Fallback acionado após falha do Demucs: {exc}"],
-            metadata={"cache_hit": False},
+            metadata={"cache_hit": False, "runtime_python": runtime_python},
         )
-
-
-def _serialize_transcript(result: dict[str, Any]) -> dict[str, Any]:
-    segments = []
-    words = []
-    for segment in result.get("segments", []):
-        segment_text = segment.get("text", "").strip()
-        if not segment_text:
-            continue
-        segments.append(
-            {
-                "start": float(segment.get("start", 0.0)),
-                "end": float(segment.get("end", 0.0)),
-                "text": segment_text,
-            }
-        )
-        for word in segment.get("words", []) or []:
-            word_text = word.get("word", "").strip()
-            if not word_text:
-                continue
-            words.append(
-                {
-                    "word": word_text,
-                    "start": float(word.get("start", 0.0)),
-                    "end": float(word.get("end", 0.0)),
-                    "score": float(word.get("score", 0.0)),
-                }
-            )
-    text = result.get("text", "").strip()
-    if not text and segments:
-        text = "\n".join(segment["text"] for segment in segments).strip()
-    return {
-        "text": text,
-        "language": result.get("language"),
-        "segments": segments,
-        "words": words,
-    }
 
 
 def _empty_transcript() -> dict[str, Any]:
@@ -168,38 +144,70 @@ def _save_transcript(path: Path, transcript: dict[str, Any]) -> None:
     path.write_text(json.dumps(transcript, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _transcribe_with_openai_whisper(vocals_path: str, transcript_path: Path) -> TranscriptResult | None:
-    if not optional_dependency_available("whisper"):
-        return None
-
-    try:
-        import whisper
-
-        model = whisper.load_model("base", device="cpu")
-        result = model.transcribe(vocals_path, fp16=False, verbose=False)
-        transcript = _serialize_transcript(result)
-        transcript["alignment_status"] = "not_aligned"
-        transcript["transcription_confidence"] = "low" if _has_transcript_text(transcript) else "none"
-        if _has_transcript_text(transcript):
-            _save_transcript(transcript_path, transcript)
-            return TranscriptResult(
-                status="success",
-                mode="rough",
-                data=transcript,
-                diagnostics=[
-                    "Transcrição bruta gerada com Whisper sem alinhamento por palavra. Revise antes de usar como letra final."
-                ],
-                metadata={"cache_hit": False, "transcript_path": str(transcript_path), "engine": "openai_whisper"},
-            )
+def _run_transcription_worker(vocals_path: str, transcript_path: Path) -> TranscriptResult:
+    runtime_python = (
+        premium_python_executable("whisperx")
+        or premium_python_executable("whisper")
+    )
+    worker_path = premium_worker_path()
+    if not runtime_python or not worker_path.exists():
         return TranscriptResult(
             status="success",
-            mode="empty",
-            data=transcript,
-            diagnostics=["Whisper executou, mas não encontrou texto vocal utilizável no áudio."],
-            metadata={"cache_hit": False, "engine": "openai_whisper"},
+            mode="skipped",
+            data=_empty_transcript(),
+            diagnostics=["Runtime WhisperX/Whisper ausente; transcrição não executada."],
+            metadata={"cache_hit": False},
         )
-    except Exception:
-        return None
+
+    worker_output = transcript_path.with_suffix(".worker.json")
+    command = [
+        runtime_python,
+        str(worker_path),
+        "transcribe",
+        "--audio",
+        vocals_path,
+        "--output",
+        str(worker_output),
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=premium_subprocess_env(runtime_python),
+        )
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout or "worker sem diagnóstico").strip()
+            raise RuntimeError(detail[-1200:])
+        payload = json.loads(worker_output.read_text(encoding="utf-8"))
+        transcript = _normalize_cached_transcript(payload.get("transcript") or _empty_transcript())
+        mode = str(payload.get("mode") or "empty")
+        diagnostics = [str(item) for item in payload.get("diagnostics", [])]
+        if _has_transcript_text(transcript):
+            _save_transcript(transcript_path, transcript)
+        return TranscriptResult(
+            status="success",
+            mode=mode,
+            data=transcript,
+            diagnostics=diagnostics,
+            metadata={
+                "cache_hit": False,
+                "transcript_path": str(transcript_path),
+                "engine": str(payload.get("engine") or "premium_worker"),
+                "runtime_python": runtime_python,
+            },
+        )
+    except Exception as exc:
+        return TranscriptResult(
+            status="success",
+            mode="skipped",
+            data=_empty_transcript(),
+            diagnostics=[f"Transcrição indisponível neste ambiente: {exc}"],
+            metadata={"cache_hit": False, "runtime_python": runtime_python},
+        )
+    finally:
+        worker_output.unlink(missing_ok=True)
 
 
 def transcribe_vocals(vocals_path: str) -> TranscriptResult:
@@ -220,107 +228,4 @@ def transcribe_vocals(vocals_path: str) -> TranscriptResult:
                 metadata={"cache_hit": True, "transcript_path": str(transcript_path)},
             )
 
-    if not optional_dependency_available("whisperx"):
-        whisper_result = _transcribe_with_openai_whisper(vocals_path, transcript_path)
-        if whisper_result is not None:
-            return whisper_result
-        return TranscriptResult(
-            status="success",
-            mode="skipped",
-            data=_empty_transcript(),
-            diagnostics=["WhisperX ausente e fallback Whisper indisponível; transcrição não executada."],
-            metadata={"cache_hit": False},
-        )
-
-    try:
-        import whisperx
-
-        device = "cpu"
-        compute_type = "int8"
-        batch_size = 4
-        audio = whisperx.load_audio(vocals_path)
-        model = whisperx.load_model("small", device=device, compute_type=compute_type)
-        result = model.transcribe(audio, batch_size=batch_size)
-
-        language_code = result.get("language") or "en"
-        base_transcript = _serialize_transcript(
-            {
-                "text": result.get("text", ""),
-                "language": language_code,
-                "segments": result.get("segments", []),
-            }
-        )
-        base_transcript["alignment_status"] = "not_aligned"
-        base_transcript["transcription_confidence"] = "low" if _has_transcript_text(base_transcript) else "none"
-
-        if not _has_transcript_text(base_transcript):
-            return TranscriptResult(
-                status="success",
-                mode="empty",
-                data=base_transcript,
-                diagnostics=["WhisperX executou, mas não encontrou texto vocal utilizável no áudio."],
-                metadata={"cache_hit": False, "engine": "whisperx"},
-            )
-
-        try:
-            align_model, metadata = whisperx.load_align_model(language_code=language_code, device=device)
-            aligned = whisperx.align(
-                result["segments"],
-                align_model,
-                metadata,
-                audio,
-                device,
-                return_char_alignments=False,
-            )
-            transcript = _serialize_transcript(
-                {
-                    "text": base_transcript["text"],
-                    "language": language_code,
-                    "segments": aligned.get("segments", []),
-                }
-            )
-            if not _has_transcript_text(transcript):
-                transcript = base_transcript
-            transcript["alignment_status"] = "word_aligned" if transcript.get("words") else "segment_only"
-            transcript["transcription_confidence"] = "medium" if transcript.get("words") else "low"
-            _save_transcript(transcript_path, transcript)
-
-            return TranscriptResult(
-                status="success",
-                mode="premium" if transcript.get("words") else "rough",
-                data=transcript,
-                diagnostics=[
-                    "WhisperX executado com alinhamento em nível de palavra."
-                    if transcript.get("words")
-                    else "WhisperX gerou texto, mas sem palavras alinhadas. Entregando transcrição bruta por segmento."
-                ],
-                metadata={"cache_hit": False, "transcript_path": str(transcript_path), "engine": "whisperx"},
-            )
-        except Exception as align_exc:
-            _save_transcript(transcript_path, base_transcript)
-            return TranscriptResult(
-                status="success",
-                mode="rough",
-                data=base_transcript,
-                diagnostics=[
-                    "WhisperX gerou texto, mas o alinhamento falhou. Entregando transcrição bruta.",
-                    f"Falha no alinhamento: {align_exc}",
-                ],
-                metadata={"cache_hit": False, "transcript_path": str(transcript_path), "engine": "whisperx"},
-            )
-
-    except Exception as exc:
-        whisper_result = _transcribe_with_openai_whisper(vocals_path, transcript_path)
-        if whisper_result is not None:
-            whisper_result.diagnostics.insert(
-                0,
-                f"WhisperX falhou; fallback Whisper acionado: {exc}",
-            )
-            return whisper_result
-        return TranscriptResult(
-            status="success",
-            mode="skipped",
-            data=_empty_transcript(),
-            diagnostics=[f"Transcrição indisponível neste ambiente: {exc}"],
-            metadata={"cache_hit": False},
-        )
+    return _run_transcription_worker(vocals_path, transcript_path)

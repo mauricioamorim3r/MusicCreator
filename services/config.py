@@ -3,7 +3,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import shutil
+import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -40,6 +42,7 @@ DATABASE_PATH = DATA_ROOT_DIR / "audioagent.db"
 KNOWLEDGE_BASE_DIR = ROOT_DIR / "knowledge_base"
 
 AUDIO_EXTENSIONS = ("mp3", "wav", "flac", "ogg", "m4a", "aac")
+PREMIUM_RUNTIME_MODULES = {"demucs", "whisperx", "whisper", "torch", "torchaudio"}
 
 LLM_PROVIDER_SPECS: dict[str, dict[str, object]] = {
     "anthropic": {
@@ -123,6 +126,77 @@ def command_available(command: str) -> bool:
     return shutil.which(command) is not None
 
 
+def _python_runtime_candidates() -> list[Path]:
+    explicit = os.getenv("AUDIOAGENT_PREMIUM_PYTHON", "").strip()
+    candidates = []
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+
+    candidates.extend(
+        [
+            Path(sys.executable).resolve().parent / "runtime" / "premium" / "python.exe",
+            ROOT_DIR.parent / "runtime" / "premium" / "python.exe",
+            ROOT_DIR / ".runtime" / "premium" / "python.exe",
+        ]
+    )
+    if not getattr(sys, "frozen", False):
+        candidates.append(Path(sys.executable))
+
+    system_python = shutil.which("python")
+    if system_python:
+        candidates.append(Path(system_python))
+
+    unique = []
+    for candidate in candidates:
+        resolved = candidate.expanduser().resolve()
+        if resolved not in unique:
+            unique.append(resolved)
+    return unique
+
+
+@lru_cache(maxsize=32)
+def _python_module_available(python_executable: str, module_name: str) -> bool:
+    try:
+        completed = subprocess.run(
+            [
+                python_executable,
+                "-c",
+                f"import importlib.util; raise SystemExit(0 if importlib.util.find_spec({module_name!r}) else 1)",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        return completed.returncode == 0
+    except Exception:
+        return False
+
+
+def premium_python_executable(*module_names: str) -> str | None:
+    required_modules = tuple(name for name in module_names if name)
+    for candidate in _python_runtime_candidates():
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        if getattr(sys, "frozen", False) and candidate == Path(sys.executable).resolve():
+            continue
+        if required_modules and not all(_python_module_available(str(candidate), name) for name in required_modules):
+            continue
+        return str(candidate)
+    return None
+
+
+def premium_worker_path() -> Path:
+    return ROOT_DIR / "services" / "premium_worker.py"
+
+
+def premium_subprocess_env(python_executable: str | None = None) -> dict[str, str]:
+    env = os.environ.copy()
+    if python_executable and "runtime\\premium" in str(Path(python_executable)).lower():
+        env["PYTHONNOUSERSITE"] = "1"
+    return env
+
+
 def ffmpeg_executable() -> str | None:
     system_ffmpeg = shutil.which("ffmpeg")
     if system_ffmpeg:
@@ -143,7 +217,11 @@ def ffmpeg_available() -> bool:
 
 
 def optional_dependency_available(module_name: str) -> bool:
-    return importlib.util.find_spec(module_name) is not None
+    if importlib.util.find_spec(module_name) is not None:
+        return True
+    if module_name in PREMIUM_RUNTIME_MODULES:
+        return premium_python_executable(module_name) is not None
+    return False
 
 
 def knowledge_base_path(name: str) -> Path:
@@ -198,6 +276,7 @@ def runtime_capabilities() -> dict[str, bool]:
         "pyloudnorm": optional_dependency_available("pyloudnorm"),
         "torch": optional_dependency_available("torch"),
         "torchaudio": optional_dependency_available("torchaudio"),
+        "premium_runtime": premium_python_executable() is not None,
         "anthropic_sdk": optional_dependency_available("anthropic"),
         "openai_sdk": optional_dependency_available("openai"),
         "gemini_sdk": optional_dependency_available("google.genai"),

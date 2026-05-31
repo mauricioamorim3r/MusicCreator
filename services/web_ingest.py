@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
-import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -98,37 +96,32 @@ def ingest_audio(source: str) -> IngestResult:
                 },
             )
 
-    download_template = str(target_dir / "source.%(ext)s")
-    command = [
-        sys.executable,
-        "-m",
-        "yt_dlp",
-        "--no-playlist",
-        "--extract-audio",
-        "--audio-format",
-        "wav",
-        "--audio-quality",
-        "0",
-        "--ffmpeg-location",
-        str(Path(ffmpeg_path).parent),
-        "-o",
-        download_template,
-        source,
-    ]
-
     try:
-        completed = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        diagnostics = [line for line in (exc.stderr or exc.stdout).splitlines() if line][:6]
+        import yt_dlp
+
+        with yt_dlp.YoutubeDL(
+            {
+                "format": "bestaudio/best",
+                "outtmpl": str(target_dir / "source.%(ext)s"),
+                "noplaylist": True,
+                "quiet": True,
+                "no_warnings": True,
+                "ffmpeg_location": str(Path(ffmpeg_path).parent),
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "wav",
+                        "preferredquality": "0",
+                    }
+                ],
+            }
+        ) as ydl:
+            ydl.extract_info(source, download=True)
+    except Exception as exc:
         return IngestResult(
             status="failure",
             error="Falha ao baixar ou converter o áudio a partir da URL.",
-            diagnostics=diagnostics,
+            diagnostics=[str(exc)],
             mode="skipped",
         )
 
@@ -137,7 +130,7 @@ def ingest_audio(source: str) -> IngestResult:
         return IngestResult(
             status="failure",
             error="O download terminou sem produzir um arquivo WAV local.",
-            diagnostics=[line for line in completed.stdout.splitlines() if line][-6:],
+            diagnostics=["yt-dlp terminou sem encontrar um WAV normalizado no cache local."],
             mode="skipped",
         )
 
