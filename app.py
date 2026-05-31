@@ -34,7 +34,7 @@ from services.config import (
 )
 from services.history_store import load_analysis_history, load_history_run, persist_analysis_run
 from services.local_database import clear_copilot_messages, list_copilot_messages, search_analysis_runs
-from services.musical_copilot import COPILOT_ACTIONS, ask_copilot
+from services.musical_copilot import COPILOT_ACTIONS, COPILOT_RESPONSE_DEPTHS, ask_copilot
 from services.user_settings import load_user_settings, save_user_settings
 
 load_dotenv()
@@ -514,6 +514,8 @@ def init_session_defaults() -> None:
         "copilot_question": "",
         "copilot_history_query": "",
         "copilot_captured_attachments": [],
+        "copilot_response_depth": "detailed",
+        "copilot_audio_premium": False,
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -682,6 +684,13 @@ def render_copilot_panel(
             key="copilot_action",
             format_func=lambda value: COPILOT_ACTIONS[value],
         )
+        response_depth = st.selectbox(
+            "Profundidade da resposta",
+            options=list(COPILOT_RESPONSE_DEPTHS),
+            key="copilot_response_depth",
+            format_func=lambda value: COPILOT_RESPONSE_DEPTHS[value],
+            help="Use Especialista quando quiser uma leitura mais extensa, com evidências, incertezas e próximos passos.",
+        )
 
         history_query = ""
         selected_run_ids: list[str] = []
@@ -717,15 +726,32 @@ def render_copilot_panel(
 
         st.markdown("#### Anexos opcionais")
         st.caption(
-            "Você pode anexar telas, PDFs, documentos e planilhas. "
+            "Você pode anexar MP3, WAV, telas, PDFs, documentos e planilhas. "
             "A captura de tela só acontece quando você clicar no botão abaixo."
+        )
+        audio_premium = st.checkbox(
+            "Aprofundar voz do áudio anexado com stems e transcrição",
+            key="copilot_audio_premium",
+            help=(
+                "Desligado: o Copiloto calcula DSP e loudness rapidamente. "
+                "Ligado: também tenta separar vocal com Demucs e transcrever com WhisperX ou Whisper. "
+                "Em CPU, a primeira leitura pode levar vários minutos."
+            ),
         )
         uploaded_attachments = st.file_uploader(
             "Anexar arquivos para o Copiloto",
-            type=["png", "jpg", "jpeg", "webp", "gif", "txt", "md", "json", "csv", "log", "yaml", "yml", "pdf", "docx", "xlsx"],
+            type=[
+                "mp3", "wav", "flac", "m4a", "aac", "ogg",
+                "png", "jpg", "jpeg", "webp", "gif",
+                "txt", "md", "json", "csv", "log", "yaml", "yml",
+                "pdf", "docx", "xlsx",
+            ],
             accept_multiple_files=True,
             key="copilot_attachment_uploads",
-            help="Limite de 15 MB por arquivo. No máximo quatro anexos são enviados em uma pergunta.",
+            help=(
+                "Limite de 200 MB por áudio e 15 MB por outro arquivo. "
+                "No máximo quatro anexos são enviados em uma pergunta."
+            ),
         )
         col_capture, col_remove = st.columns(2)
         capture_clicked = col_capture.button("📷 Capturar tela agora", use_container_width=True)
@@ -746,9 +772,14 @@ def render_copilot_panel(
         attachments: list[dict] = []
         for uploaded_attachment in (uploaded_attachments or [])[:4]:
             try:
-                attachments.append(
-                    prepare_attachment(uploaded_attachment.name, uploaded_attachment.getvalue())
-                )
+                with st.spinner(f"Preparando `{uploaded_attachment.name}` para o Copiloto..."):
+                    attachments.append(
+                        prepare_attachment(
+                            uploaded_attachment.name,
+                            uploaded_attachment.getvalue(),
+                            enable_audio_premium=audio_premium,
+                        )
+                    )
             except Exception as exc:
                 st.warning(f"`{uploaded_attachment.name}` não pôde ser anexado: {exc}")
         attachments.extend(st.session_state.get("copilot_captured_attachments", []))
@@ -773,6 +804,25 @@ def render_copilot_panel(
                         caption="Captura local que será enviada junto com a pergunta.",
                         use_container_width=True,
                     )
+            audio_attachments = [
+                attachment for attachment in attachments
+                if attachment.get("kind") == "audio"
+            ]
+            for attachment in audio_attachments:
+                audio_analysis = attachment.get("audio_analysis", {}) or {}
+                if audio_analysis.get("status") == "success":
+                    mode = audio_analysis.get("analysis_mode", "local_dsp")
+                    st.success(
+                        f"Dossiê local pronto para `{attachment.get('name')}` · modo `{mode}`. "
+                        "As próximas perguntas reutilizam o cache."
+                    )
+                else:
+                    st.warning(
+                        f"O áudio `{attachment.get('name')}` foi recebido, mas a leitura local falhou: "
+                        f"{audio_analysis.get('error') or 'diagnóstico indisponível'}"
+                    )
+                if attachment.get("audio_path"):
+                    st.audio(str(attachment["audio_path"]))
 
         question = st.text_area(
             "Pergunta para o Copiloto",
@@ -811,11 +861,14 @@ def render_copilot_panel(
                             history_query=history_query,
                             selected_run_ids=selected_run_ids,
                             attachments=attachments,
+                            response_depth=response_depth,
                         )
                     if response.get("fallback_used"):
                         st.info(
                             f"Fallback de LLM utilizado: {response.get('label')} · {response.get('model')}."
                         )
+                    if response.get("language_retry_used"):
+                        st.info("A resposta inicial saiu em outro idioma e foi automaticamente refeita em português brasileiro.")
                 except Exception as exc:
                     st.error(f"Copiloto indisponível: {exc}")
 

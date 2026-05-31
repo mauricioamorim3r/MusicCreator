@@ -40,6 +40,16 @@ def _crest_factor_db(mono: np.ndarray) -> float:
 
 def _cache_key(audio_path: str) -> str:
     path = Path(audio_path)
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    fingerprint = f"{hasher.hexdigest()}|pyloudnorm:{optional_dependency_available('pyloudnorm')}"
+    return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:16]
+
+
+def _legacy_cache_key(audio_path: str) -> str:
+    path = Path(audio_path)
     stat = path.stat()
     fingerprint = f"{path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}|pyloudnorm:{optional_dependency_available('pyloudnorm')}"
     return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:16]
@@ -63,6 +73,7 @@ def analyze_loudness(audio_path: str) -> ResultEnvelope:
     ensure_runtime_dirs()
     cache_key = _cache_key(audio_path)
     cache_path = LOUDNESS_CACHE_DIR / f"{cache_key}.json"
+    legacy_cache_path = LOUDNESS_CACHE_DIR / f"{_legacy_cache_key(audio_path)}.json"
     if cache_path.exists():
         payload = json.loads(cache_path.read_text(encoding="utf-8"))
         return ResultEnvelope(
@@ -70,6 +81,16 @@ def analyze_loudness(audio_path: str) -> ResultEnvelope:
             mode=payload.get("method", "cached"),
             data=payload,
             diagnostics=["Loudness reaproveitado do cache local."],
+            metadata={"cache_hit": True, "cache_path": str(cache_path)},
+        )
+    if legacy_cache_path.exists():
+        payload = json.loads(legacy_cache_path.read_text(encoding="utf-8"))
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return ResultEnvelope(
+            status="success",
+            mode=payload.get("method", "cached"),
+            data=payload,
+            diagnostics=["Loudness reaproveitado e migrado para o cache por conteúdo."],
             metadata={"cache_hit": True, "cache_path": str(cache_path)},
         )
 

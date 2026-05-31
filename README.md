@@ -76,8 +76,11 @@ O painel `Copiloto Musical` permite conversar com a LLM configurada e executar a
 - responder dúvidas gerais de produção musical
 - capturar a tela localmente após clique explícito do usuário
 - analisar imagens, TXT, Markdown, JSON, CSV, PDF, DOCX e XLSX anexados
+- analisar MP3, WAV, FLAC, M4A, AAC e OGG anexados com DSP e loudness locais
+- aprofundar opcionalmente o áudio anexado com separação vocal e transcrição
+- escolher respostas objetivas, detalhadas ou em nível especialista
 
-O copiloto não executa comandos do sistema nem SQL arbitrário. A captura de tela nunca ocorre automaticamente. Pesquisa web profunda com fontes verificáveis deve ser adicionada como integração externa separada.
+O copiloto não executa comandos do sistema nem SQL arbitrário. A captura de tela nunca ocorre automaticamente. O áudio não é enviado indiscriminadamente para a LLM: primeiro ele vira um dossiê técnico local e cacheado, compatível com OpenAI, Gemini e Anthropic. Pesquisa web profunda com fontes verificáveis deve ser adicionada como integração externa separada.
 
 ## Deploy no Render
 

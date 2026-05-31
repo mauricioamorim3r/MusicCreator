@@ -44,8 +44,19 @@ Dentro do Copiloto você também pode:
 - revisar o preview antes de enviar a pergunta
 - anexar imagens de telas do Suno, DAWs ou outras aplicações
 - anexar TXT, Markdown, JSON, CSV, PDF, DOCX e XLSX para leitura orientada pela sua pergunta
+- anexar MP3, WAV, FLAC, M4A, AAC e OGG para gerar um dossiê técnico local e conversar sobre a faixa
+- ouvir o áudio anexado diretamente no player do painel
+- escolher respostas `Objetiva`, `Detalhada` ou `Especialista`
 
 A captura nunca acontece sozinha. Antes de enviar, feche ou oculte informações pessoais que não devem ser compartilhadas com o provider de LLM configurado.
+
+### Como o Copiloto lê um áudio anexado
+
+No modo padrão, o Copiloto calcula DSP, BPM, tonalidade provável, estrutura em blocos, espectro e loudness. Esse dossiê é salvo em cache e reutilizado nas perguntas seguintes.
+
+Se você ativar `Aprofundar voz do áudio anexado com stems e transcrição`, o app também tenta usar Demucs e WhisperX ou Whisper. Essa primeira execução pode levar vários minutos em CPU. A transcrição é um rascunho técnico para estudo e deve ser revisada antes de ser tratada como letra final.
+
+O MP3 ou WAV não é enviado automaticamente para qualquer modelo. A aplicação usa primeiro o dossiê local para manter o comportamento previsível entre OpenAI, Gemini e Anthropic.
 
 ### Limites de segurança
 

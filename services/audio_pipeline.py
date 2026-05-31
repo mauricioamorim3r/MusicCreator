@@ -99,6 +99,16 @@ def ingest_uploaded_audio(file_name: str, file_bytes: bytes) -> IngestResult:
 
 def _dsp_cache_key(audio_path: str, n_sections: int) -> str:
     path = Path(audio_path)
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    fingerprint = f"{hasher.hexdigest()}|{n_sections}"
+    return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:16]
+
+
+def _legacy_dsp_cache_key(audio_path: str, n_sections: int) -> str:
+    path = Path(audio_path)
     stat = path.stat()
     fingerprint = f"{path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}|{n_sections}"
     return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:16]
@@ -108,6 +118,7 @@ def analyze_audio_cached(audio_path: str, n_sections: int) -> ResultEnvelope:
     ensure_runtime_dirs()
     cache_key = _dsp_cache_key(audio_path, n_sections)
     cache_path = DSP_CACHE_DIR / f"{cache_key}.json"
+    legacy_cache_path = DSP_CACHE_DIR / f"{_legacy_dsp_cache_key(audio_path, n_sections)}.json"
     if cache_path.exists():
         payload = json.loads(cache_path.read_text(encoding="utf-8"))
         return ResultEnvelope(
@@ -115,6 +126,16 @@ def analyze_audio_cached(audio_path: str, n_sections: int) -> ResultEnvelope:
             mode="cached",
             data=payload,
             diagnostics=["Análise DSP reaproveitada do cache local."],
+            metadata={"cache_key": cache_key, "cache_path": str(cache_path)},
+        )
+    if legacy_cache_path.exists():
+        payload = json.loads(legacy_cache_path.read_text(encoding="utf-8"))
+        cache_path.write_text(json.dumps(_json_safe(payload), ensure_ascii=False), encoding="utf-8")
+        return ResultEnvelope(
+            status="success",
+            mode="cached",
+            data=payload,
+            diagnostics=["Análise DSP reaproveitada e migrada para o cache por conteúdo."],
             metadata={"cache_key": cache_key, "cache_path": str(cache_path)},
         )
 

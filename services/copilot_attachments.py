@@ -11,14 +11,17 @@ from typing import Any
 from uuid import uuid4
 
 from services.config import CACHE_DIR, ensure_runtime_dirs
+from services.copilot_audio import build_audio_attachment_dossier
 
 
 ATTACHMENTS_DIR = CACHE_DIR / "copilot_attachments"
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 TEXT_EXTENSIONS = {".txt", ".md", ".json", ".csv", ".log", ".yaml", ".yml"}
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".xlsx"}
-SUPPORTED_EXTENSIONS = IMAGE_EXTENSIONS | TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg"}
+SUPPORTED_EXTENSIONS = IMAGE_EXTENSIONS | TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS | AUDIO_EXTENSIONS
 MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024
+MAX_AUDIO_ATTACHMENT_BYTES = 200 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 40_000
 
 
@@ -40,28 +43,46 @@ def capture_screen() -> dict[str, Any]:
     return prepare_attachment(path.name, path.read_bytes())
 
 
-def prepare_attachment(name: str, content: bytes) -> dict[str, Any]:
+def prepare_attachment(
+    name: str,
+    content: bytes,
+    *,
+    enable_audio_premium: bool = False,
+) -> dict[str, Any]:
     if not content:
         raise ValueError("O arquivo anexado está vazio.")
-    if len(content) > MAX_ATTACHMENT_BYTES:
+    suffix = Path(name).suffix.lower()
+    size_limit = MAX_AUDIO_ATTACHMENT_BYTES if suffix in AUDIO_EXTENSIONS else MAX_ATTACHMENT_BYTES
+    if len(content) > size_limit:
+        if suffix in AUDIO_EXTENSIONS:
+            raise ValueError("O áudio anexado excede o limite de 200 MB.")
         raise ValueError("O arquivo anexado excede o limite de 15 MB.")
 
-    suffix = Path(name).suffix.lower()
     if suffix not in SUPPORTED_EXTENSIONS:
         raise ValueError(
-            "Formato não suportado. Use imagem, TXT, Markdown, JSON, CSV, PDF, DOCX ou XLSX."
+            "Formato não suportado. Use áudio, imagem, TXT, Markdown, JSON, CSV, PDF, DOCX ou XLSX."
         )
 
     mime_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    kind = "image" if suffix in IMAGE_EXTENSIONS else "audio" if suffix in AUDIO_EXTENSIONS else "document"
     attachment: dict[str, Any] = {
         "name": Path(name).name,
         "suffix": suffix,
         "mime_type": mime_type,
         "size_bytes": len(content),
-        "kind": "image" if suffix in IMAGE_EXTENSIONS else "document",
+        "kind": kind,
     }
     if suffix in IMAGE_EXTENSIONS:
         attachment["image_base64"] = base64.b64encode(content).decode("ascii")
+        attachment["extracted_text"] = ""
+    elif suffix in AUDIO_EXTENSIONS:
+        dossier = build_audio_attachment_dossier(
+            name,
+            content,
+            enable_premium=enable_audio_premium,
+        )
+        attachment["audio_path"] = str(dossier.pop("_audio_path", ""))
+        attachment["audio_analysis"] = dossier
         attachment["extracted_text"] = ""
     else:
         attachment["extracted_text"] = _extract_document_text(suffix, content)
@@ -76,6 +97,7 @@ def public_attachment_summary(attachment: dict[str, Any]) -> dict[str, Any]:
         "size_bytes": attachment.get("size_bytes"),
         "extracted_text": attachment.get("extracted_text", ""),
         "image_sent_to_llm": bool(attachment.get("image_base64")),
+        "audio_analysis": attachment.get("audio_analysis"),
     }
 
 
@@ -144,4 +166,3 @@ def _truncate(text: str) -> str:
     if len(text) <= MAX_EXTRACTED_CHARS:
         return text
     return text[:MAX_EXTRACTED_CHARS] + "\n[conteúdo truncado localmente]"
-
