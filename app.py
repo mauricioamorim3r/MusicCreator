@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 import streamlit as st
 from dotenv import load_dotenv
 
-import core.web_ingest as web_ingest
 from services.audio_pipeline import run_audio_pipeline
 from services.copilot_attachments import capture_screen, prepare_attachment
 from services.config import (
@@ -90,11 +89,13 @@ st.markdown(
         color: var(--text-main);
     }
     [data-testid="stHeader"], header {
-        background: linear-gradient(90deg, rgba(5, 11, 17, 0.96), rgba(9, 19, 29, 0.92)) !important;
-        border-bottom: 1px solid rgba(120,160,190,0.12);
+        height: 0 !important;
+        min-height: 0 !important;
+        background: transparent !important;
+        border: 0 !important;
     }
-    [data-testid="stToolbar"], [data-testid="stDecoration"] {
-        color: rgba(245, 239, 228, 0.72) !important;
+    [data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer {
+        display: none !important;
     }
     body, p, li, label, [data-testid="stMarkdownContainer"] {
         font-family: "IBM Plex Sans", sans-serif;
@@ -120,6 +121,14 @@ st.markdown(
     [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
         letter-spacing: 0.06em;
         color: #f5efe4 !important;
+    }
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stCheckbox"] label p,
+    [data-testid="stToggle"] label p,
+    .stTextInput label p,
+    .stTextArea label p,
+    .stSelectbox label p {
+        color: #c8d9e6 !important;
     }
     [data-testid="stSidebar"] [data-testid="stExpander"] {
         border-color: rgba(120,160,190,0.18);
@@ -178,9 +187,9 @@ st.markdown(
         background: linear-gradient(90deg, rgba(255,143,51,0.98), rgba(255,169,92,0.98));
     }
     .stButton > button:disabled, .stDownloadButton > button:disabled {
-        background: linear-gradient(90deg, rgba(255,122,0,0.38), rgba(255,140,43,0.34)) !important;
-        border-color: rgba(255,122,0,0.16) !important;
-        color: rgba(18, 12, 9, 0.58) !important;
+        background: rgba(38, 55, 71, 0.82) !important;
+        border-color: rgba(120,160,190,0.2) !important;
+        color: #a9bdcc !important;
         box-shadow: none !important;
     }
     [data-testid="stFileUploaderDropzone"] {
@@ -219,8 +228,8 @@ st.markdown(
         overflow: hidden;
         border: 1px solid var(--line-soft);
         border-radius: 28px;
-        padding: 1.5rem 1.6rem 1.35rem;
-        margin-bottom: 1.2rem;
+        padding: 1.35rem 1.55rem 1.2rem;
+        margin-bottom: 0.85rem;
         background:
             radial-gradient(circle at 12% 20%, rgba(255,122,0,0.18), transparent 24%),
             radial-gradient(circle at 88% 16%, rgba(0,209,191,0.14), transparent 26%),
@@ -250,30 +259,30 @@ st.markdown(
         font-size: 1rem;
         line-height: 1.6;
     }
-    .hero-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0.75rem;
-        margin-top: 1.15rem;
+    .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-top: 1rem;
     }
-    .hero-panel {
-        border-radius: 18px;
-        padding: 0.9rem 1rem;
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(120,160,190,0.14);
-        backdrop-filter: blur(10px);
+    .hero-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.42rem;
+        border-radius: 999px;
+        padding: 0.45rem 0.72rem;
+        background: rgba(255,255,255,0.035);
+        border: 1px solid rgba(120,160,190,0.16);
+        color: #c8d9e6;
+        font-size: 0.8rem;
+        font-weight: 600;
     }
-    .hero-label {
-        color: var(--text-soft);
-        font-size: 0.74rem;
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        margin-bottom: 0.35rem;
-    }
-    .hero-value {
-        color: var(--text-main);
-        font-size: 1.04rem;
-        font-weight: 700;
+    .hero-chip-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--accent-cool);
+        box-shadow: 0 0 12px rgba(0,209,191,0.7);
     }
     .section-intro {
         font-size: 0.9rem;
@@ -441,11 +450,9 @@ st.markdown(
         .stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 980px) {
-        .hero-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .hero-title { font-size: 2.4rem; }
     }
     @media (max-width: 640px) {
-        .hero-grid { grid-template-columns: 1fr; }
         .stat-strip { grid-template-columns: 1fr; }
     }
 </style>
@@ -608,44 +615,30 @@ def persist_user_preferences(
 
 
 def render_hero_header() -> None:
-    provider = st.session_state.get("llm_provider_choice", "openai")
-    model = st.session_state.get("llm_model_input", llm_default_model(provider))
-    premium_label = "Premium ativo" if st.session_state.get("enable_premium_toggle") else "Premium desligado"
-    agents_label = "Agentes IA ativos" if st.session_state.get("run_agents_toggle") else "Somente análise local"
+    premium_label = "Voz avançada ativa" if st.session_state.get("enable_premium_toggle") else "Leitura DSP"
+    agents_label = "IA criativa ativa" if st.session_state.get("run_agents_toggle") else "Análise local"
     sections_label = f"{st.session_state.get('n_sections_slider', 8)} blocos estruturais"
-    matcher_label = "Matcher com contexto" if st.session_state.get("matcher_source_notes", "").strip() else "Matcher catálogo local"
     st.markdown(
         f"""
         <section class="hero-shell">
-            <div class="hero-kicker">Music intelligence workstation</div>
+            <div class="hero-kicker">Estação de inteligência musical</div>
             <h1 class="hero-title">AudioAgent</h1>
             <div class="hero-copy">
-                Uma bancada de análise musical para transformar áudio em leitura estrutural, letra validada,
-                candidatos de mashup e direção criativa pronta para produção.
+                Transforme uma faixa em leitura estrutural, letra analisada, candidatos de mashup
+                e direção criativa pronta para produção.
             </div>
-            <div class="hero-grid">
-                <div class="hero-panel">
-                    <div class="hero-label">LLM atual</div>
-                    <div class="hero-value">{llm_provider_label(provider)} · {model}</div>
-                </div>
-                <div class="hero-panel">
-                    <div class="hero-label">Modo criativo</div>
-                    <div class="hero-value">{agents_label}</div>
-                </div>
-                <div class="hero-panel">
-                    <div class="hero-label">Motor vocal</div>
-                    <div class="hero-value">{premium_label}</div>
-                </div>
-                <div class="hero-panel">
-                    <div class="hero-label">Leitura estrutural</div>
-                    <div class="hero-value">{sections_label} · {matcher_label}</div>
-                </div>
+            <div class="hero-meta">
+                <div class="hero-chip"><span class="hero-chip-dot"></span>Online</div>
+                <div class="hero-chip">{agents_label}</div>
+                <div class="hero-chip">{premium_label}</div>
+                <div class="hero-chip">{sections_label}</div>
             </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
-    render_runtime_health_banner()
+    if st.session_state.get("runtime_state") in {"running", "error"}:
+        render_runtime_health_banner()
 
 
 def _active_llm_options(
@@ -1110,6 +1103,8 @@ def run_analysis_flow(
         st.session_state["agent_outputs"] = agent_outputs
         mark_runtime_status("online", "idle", "Aplicação online. Última análise concluída com sucesso.")
         progress_bar.progress(1.0, text="Pipeline concluído.")
+        status_placeholder.empty()
+        progress_bar.empty()
         if pipeline_result.mode == "completed_with_warnings":
             st.warning("⚠️ Análise concluída com ressalvas, mas o trabalho já feito foi preservado.")
             for item in warnings:
@@ -1122,15 +1117,19 @@ def run_analysis_flow(
                 f"Rodada concluída em {llm_provider_label(agents_metadata.get('llm_provider', llm_provider))} "
                 f"· {agents_metadata.get('llm_model', llm_model)}."
             )
-        st.caption(f"Histórico salvo: `{history_entry.get('run_id', '')}`")
+        if st.session_state.get("show_technical_area"):
+            st.caption(f"Histórico salvo: `{history_entry.get('run_id', '')}`")
     else:
         mark_runtime_status("error", "idle", pipeline_result.error or "A execução falhou. Revise o histórico técnico.")
+        status_placeholder.empty()
+        progress_bar.empty()
         st.error(pipeline_result.error or "O pipeline falhou.")
         if pipeline_result.diagnostics:
             with st.expander("Detalhes técnicos da falha", expanded=False):
                 for item in pipeline_result.diagnostics:
                     st.code(str(item), language=None)
-        st.caption(f"Falha registrada no histórico: `{history_entry.get('run_id', '')}`")
+        if st.session_state.get("show_technical_area"):
+            st.caption(f"Falha registrada no histórico: `{history_entry.get('run_id', '')}`")
 
 
 def render_audio_preview(pipeline: dict, uploaded_file) -> None:
@@ -1652,7 +1651,7 @@ def render_report_downloads(
 ) -> None:
     st.subheader("⬇️ Downloads dos Relatórios")
     st.markdown(
-        '<div class="section-intro">Os relatórios também ficam gravados em disco para garantir acesso mesmo se o navegador interno bloquear algum download.</div>',
+        '<div class="section-intro">Baixe a leitura completa ou a versão em texto para consultar fora da aplicação.</div>',
         unsafe_allow_html=True,
     )
 
@@ -1703,7 +1702,8 @@ def render_report_downloads(
         with st.container(border=True):
             cols = st.columns([2, 1, 2])
             cols[0].markdown(f"**{item['label']}**")
-            cols[0].caption(str(path))
+            if st.session_state.get("show_technical_area"):
+                cols[0].caption(str(path))
             cols[1].metric("Tamanho", _file_size_label(path))
             cols[2].download_button(
                 label=f"Baixar {item['label']}",
@@ -2074,40 +2074,11 @@ def render_history_tab() -> None:
 
 with st.sidebar:
     st.markdown("## 🎵 AudioAgent")
-    st.markdown("**Foundation v2.0**")
+    st.caption("Estúdio local de análise musical")
     st.divider()
 
     with st.expander("Como usar a aplicação", expanded=False):
         st.markdown(load_user_guide())
-
-    st.checkbox(
-        "Mostrar área técnica reservada",
-        key="show_technical_area",
-        help="Exibe o histórico persistente e os logs completos das análises nesta instalação.",
-    )
-
-    st.subheader("1. Ingestão de Áudio")
-    sidebar_audio_url = st.text_input(
-        "Ou colar link (YouTube / SoundCloud):",
-        key="sidebar_audio_url",
-        placeholder="https://youtu.be/...",
-    )
-    if st.button("Descarregar e Processar Link", use_container_width=True):
-        if not sidebar_audio_url.strip():
-            st.error("Cole um link válido para iniciar o pré-download.")
-        else:
-            with st.spinner("A descarregar áudio na melhor qualidade..."):
-                try:
-                    temp_wav = web_ingest.download_audio_from_url(sidebar_audio_url.strip())
-                    st.session_state["prefetched_url"] = sidebar_audio_url.strip()
-                    st.session_state["prefetched_audio_path"] = temp_wav
-                    st.session_state["main_source_url"] = sidebar_audio_url.strip()
-                    st.session_state["auto_run_analysis"] = True
-                    st.success("Download concluído. A análise do link será iniciada automaticamente.")
-                except Exception as exc:
-                    st.error(f"Erro no download: {exc}")
-
-    st.divider()
 
     st.subheader("🤖 LLM")
     with st.expander("Configuração de LLM", expanded=False):
@@ -2185,8 +2156,6 @@ with st.sidebar:
             st.caption("Ordem provável de tentativa: " + " → ".join(fallback_preview))
         elif auto_llm_fallback:
             st.caption("Nenhuma LLM extra configurada foi encontrada para fallback no momento.")
-
-    st.caption("Abra o menu de configuração acima para trocar provider, modelo e chave.")
 
     with st.expander("Referências musicais e letra online", expanded=False):
         matcher_source_notes = st.text_area(
@@ -2266,20 +2235,24 @@ with st.sidebar:
         key="n_sections_slider",
         help="Controla o quanto a música será dividida em blocos para a leitura estrutural.",
     )
-    st.caption("Mais baixo = visão mais geral da música. Mais alto = leitura mais detalhada das transições e mudanças de energia.")
-    st.caption("Separação de voz e transcrição avançada: usa motores extras para tentar isolar a voz e escrever a letra com tempo. Se este computador não suportar, a análise básica continua normalmente.")
+    st.caption("Use mais blocos quando a faixa tiver muitas transições. A voz avançada pode deixar a primeira análise mais lenta.")
 
     st.divider()
-    st.subheader("🧪 Runtime")
-    capabilities = runtime_capabilities()
-    st.caption(
-        f"Status atual: {st.session_state.get('runtime_state', 'online')} | "
-        f"Etapa: {st.session_state.get('runtime_stage', 'idle')} | "
-        f"Último sinal: {st.session_state.get('runtime_last_seen', '--:--:--')}"
-    )
-    capability_rows = [{"Feature": key, "Disponível": "Sim" if value else "Não"} for key, value in capabilities.items()]
-    st.dataframe(capability_rows, use_container_width=True, hide_index=True)
-    st.caption("CPU-first: recursos premium fazem fallback quando indisponíveis.")
+    with st.expander("🔧 Área técnica reservada", expanded=False):
+        st.checkbox(
+            "Mostrar histórico e diagnóstico técnico",
+            key="show_technical_area",
+            help="Exibe o histórico persistente, logs completos e capacidades instaladas neste computador.",
+        )
+        if st.session_state.get("show_technical_area"):
+            capabilities = runtime_capabilities()
+            st.caption(
+                f"Status: {st.session_state.get('runtime_state', 'online')} | "
+                f"Etapa: {st.session_state.get('runtime_stage', 'idle')} | "
+                f"Último sinal: {st.session_state.get('runtime_last_seen', '--:--:--')}"
+            )
+            capability_rows = [{"Recurso": key, "Disponível": "Sim" if value else "Não"} for key, value in capabilities.items()]
+            st.dataframe(capability_rows, use_container_width=True, hide_index=True)
 
     persist_user_preferences(
         llm_provider=llm_provider,
@@ -2301,11 +2274,10 @@ render_copilot_panel(
     auto_llm_fallback=auto_llm_fallback,
 )
 st.markdown(
-    '<div class="panel-note">Carregue um arquivo ou um link para iniciar uma leitura completa da música: '
-    'estrutura, energia, voz, prompt criativo e riscos de originalidade em um único fluxo.</div>',
+    '<div class="panel-note">Carregue uma faixa ou cole um link. O AudioAgent organiza a leitura completa em um único fluxo.</div>',
     unsafe_allow_html=True,
 )
-st.markdown('<div class="section-intro">Entrada de áudio</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-intro">Escolha a música para analisar</div>', unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader(
     "Arraste ou selecione um arquivo de áudio",
@@ -2320,20 +2292,15 @@ source_url = st.text_input(
 
 if uploaded_file and source_url:
     st.warning("Quando upload e link são informados ao mesmo tempo, o upload local terá prioridade.")
-elif st.session_state.get("prefetched_audio_path") and source_url:
-    st.caption(f"Link pré-processado e em cache: `{st.session_state['prefetched_audio_path']}`")
 
 render_audio_preview(st.session_state.get("pipeline", {}).get("data", {}) if st.session_state.get("pipeline") else {}, uploaded_file)
 
 can_analyze = uploaded_file is not None or bool(source_url.strip())
-status_placeholder = st.empty()
-progress_bar = st.progress(0.0, text="Aguardando análise…")
 manual_trigger = st.button("🔬 Analisar", type="primary", use_container_width=True, disabled=not can_analyze)
-auto_trigger = bool(st.session_state.pop("auto_run_analysis", False))
-if auto_trigger and can_analyze:
-    st.info("Link preparado pela sidebar. Iniciando análise automaticamente.")
 
-if manual_trigger or (auto_trigger and can_analyze):
+if manual_trigger:
+    status_placeholder = st.empty()
+    progress_bar = st.progress(0.0, text="Preparando análise…")
     run_analysis_flow(
         uploaded_file=uploaded_file,
         source_url=source_url,
@@ -2369,7 +2336,11 @@ if pipeline_state:
 
     st.divider()
 
-    if agent_meta.get("llm_provider") and agent_meta.get("llm_model"):
+    if (
+        st.session_state.get("show_technical_area")
+        and agent_meta.get("llm_provider")
+        and agent_meta.get("llm_model")
+    ):
         st.caption(
             f"LLM em uso: {llm_provider_label(agent_meta['llm_provider'])} | modelo `{agent_meta['llm_model']}`"
         )
@@ -2381,10 +2352,10 @@ if pipeline_state:
             "🎚️ Studio View",
             lambda sr=source_result, dr=dsp_result, tr=transcript_result, lr=lyric_validation_result, mr=matcher_result, ar=agents_result: render_studio_view(sr, dr, tr, lr, mr, ar),
         ),
-        ("🧭 Pipeline", lambda: render_stage_table(stage_log, performance=performance, analysis_context=analysis_context, agents_result=agents_result)),
     ]
 
     if st.session_state.get("show_technical_area"):
+        tabs_to_render.append(("🧭 Pipeline", lambda: render_stage_table(stage_log, performance=performance, analysis_context=analysis_context, agents_result=agents_result)))
         tabs_to_render.append(("🗃️ Histórico Técnico", render_history_tab))
 
     tabs_to_render.append((
